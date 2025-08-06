@@ -18,12 +18,17 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from langsmith import traceable
 from dotenv import load_dotenv
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # Load environment variables from .env file
 load_dotenv()
 # --- Configuration ---
 EXPECTED_API_KEY = os.getenv("API_KEY", "your_default_secret_api_key")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+embedding_model = HuggingFaceEmbeddings(model_name="BAAI/bge-large-en")
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
@@ -77,13 +82,16 @@ def process_document_and_get_retriever(pdf_url: str):
     docs = loader.load()
 
     # 2. Split the document
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     all_splits = text_splitter.split_documents(docs)
 
     # 3. Create and store embeddings (This is the slow part we want to cache)
     vector_store = Chroma.from_documents(
         documents=all_splits,
-        embedding=MistralAIEmbeddings(model="mistral-embed", mistral_api_key=MISTRAL_API_KEY)
+        embedding = MistralAIEmbeddings(
+    model="mistral-embed",  # This is the standard embedding model name
+    mistral_api_key=MISTRAL_API_KEY  # Optional if set in environment variable
+)
     )
 
     # 4. Create a retriever
@@ -103,6 +111,11 @@ Documents:
 {context}
 """
 prompt = ChatPromptTemplate.from_template(structured_input_template)
+# model = ChatGoogleGenerativeAI(
+#     model="gemini-1.5-pro",
+#     google_api_key=GEMINI_API_KEY,
+#     temperature=0.2
+# )
 model = ChatMistralAI(model="mistral-medium", mistral_api_key=MISTRAL_API_KEY)
 chain = prompt | model
 
