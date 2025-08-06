@@ -102,7 +102,7 @@ Documents:
 {context}
 """
 prompt = ChatPromptTemplate.from_template(structured_input_template)
-model = ChatMistralAI(model="mistral-large-latest", mistral_api_key=MISTRAL_API_KEY)
+model = ChatMistralAI(model="mistral-small-latest", mistral_api_key=MISTRAL_API_KEY)
 chain = prompt | model
 
 # --- OPTIMIZATION 2: Asynchronous Answering ---
