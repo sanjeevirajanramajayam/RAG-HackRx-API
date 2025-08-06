@@ -18,8 +18,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from langsmith import traceable
 from dotenv import load_dotenv
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
+# from langchain_community.embeddings import HuggingFaceEmbeddings
+# from langchain_google_genai import ChatGoogleGenerativeAI
 
 # Load environment variables from .env file
 load_dotenv()
@@ -28,7 +28,7 @@ EXPECTED_API_KEY = os.getenv("API_KEY", "your_default_secret_api_key")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-embedding_model = HuggingFaceEmbeddings(model_name="BAAI/bge-large-en")
+# embedding_model = HuggingFaceEmbeddings(model_name="BAAI/bge-large-en")
 
 # --- FastAPI App Initialization ---
 app = FastAPI(
