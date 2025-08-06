@@ -5,6 +5,7 @@ import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, status, Header
 from pydantic import BaseModel, Field, HttpUrl
 from typing import List
+from urllib.parse import urlparse
 
 # Import your existing RAG components
 from langchain_community.document_loaders import PyPDFLoader
@@ -45,6 +46,12 @@ async def verify_api_key(authorization: str = Header(...)):
     token = authorization.split(" ")[1]
     if token != EXPECTED_API_KEY:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API Key.")
+    
+
+def get_safe_filename_from_url(url):
+    path = urlparse(url).path
+    filename = os.path.basename(path)
+    return f"temp_{filename}"
 
 # --- OPTIMIZATION 1: Caching Mechanism ---
 # This dictionary will store our retrievers in memory to avoid reprocessing.
@@ -59,14 +66,14 @@ def process_document_and_get_retriever(pdf_url: str):
     # Check if the retriever is already in our cache
     if pdf_url in retriever_cache:
         print(f"CACHE HIT: Retrieving retriever for {pdf_url} from cache.")
-        return retriever_cache[pdf_url]
+        # return retriever_cache[pdf_url]
 
     print(f"CACHE MISS: Processing new document from {pdf_url}.")
     
     # Download the PDF
     response = requests.get(pdf_url)
     response.raise_for_status()
-    temp_pdf_path = f"temp_{os.path.basename(pdf_url)}.pdf"
+    temp_pdf_path = get_safe_filename_from_url(pdf_url)
     with open(temp_pdf_path, "wb") as f:
         f.write(response.content)
 
