@@ -6,6 +6,8 @@ from fastapi import FastAPI, Depends, HTTPException, status, Header
 from pydantic import BaseModel, Field, HttpUrl
 from typing import List
 from urllib.parse import urlparse
+import os
+
 
 # Import your existing RAG components
 from langchain_community.document_loaders import PyPDFLoader
@@ -19,7 +21,6 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
-
 # --- Configuration ---
 EXPECTED_API_KEY = os.getenv("API_KEY", "your_default_secret_api_key")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
@@ -55,7 +56,6 @@ def get_safe_filename_from_url(url):
 
 # --- OPTIMIZATION 1: Caching Mechanism ---
 # This dictionary will store our retrievers in memory to avoid reprocessing.
-retriever_cache = {}
 
 @traceable
 def process_document_and_get_retriever(pdf_url: str):
@@ -63,11 +63,6 @@ def process_document_and_get_retriever(pdf_url: str):
     Loads, splits a PDF, and creates a retriever.
     Crucially, it caches the retriever based on the PDF URL.
     """
-    # Check if the retriever is already in our cache
-    if pdf_url in retriever_cache:
-        print(f"CACHE HIT: Retrieving retriever for {pdf_url} from cache.")
-        # return retriever_cache[pdf_url]
-
     print(f"CACHE MISS: Processing new document from {pdf_url}.")
     
     # Download the PDF
@@ -95,7 +90,6 @@ def process_document_and_get_retriever(pdf_url: str):
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
 
     # 5. Store the new retriever in the cache and clean up
-    retriever_cache[pdf_url] = retriever
     os.remove(temp_pdf_path)
     
     return retriever
@@ -109,7 +103,7 @@ Documents:
 {context}
 """
 prompt = ChatPromptTemplate.from_template(structured_input_template)
-model = ChatMistralAI(model="mistral-small-latest", mistral_api_key=MISTRAL_API_KEY)
+model = ChatMistralAI(model="mistral-medium", mistral_api_key=MISTRAL_API_KEY)
 chain = prompt | model
 
 # --- OPTIMIZATION 2: Asynchronous Answering ---
