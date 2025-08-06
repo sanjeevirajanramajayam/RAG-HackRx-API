@@ -131,7 +131,7 @@ async def answer_question(query: str, retriever, chain: Runnable):
 
 # --- API Endpoint ---
 @app.post(
-    "/hackrx/run",
+    "/api/v1/hackrx/run",
     response_model=APIResponse,
     summary="Process a policy document and answer questions",
     dependencies=[Depends(verify_api_key)]
