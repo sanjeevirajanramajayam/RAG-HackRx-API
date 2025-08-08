@@ -18,6 +18,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from langsmith import traceable
 from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.vectorstores import FAISS
+
 # from langchain_community.embeddings import HuggingFaceEmbeddings
 # from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -26,7 +29,46 @@ load_dotenv()
 # --- Configuration ---
 EXPECTED_API_KEY = os.getenv("API_KEY", "your_default_secret_api_key")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# print(GOOGLE_API_KEY)
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+os.environ["LANGSMITH_TRACING"] = "true"
+
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
+    temperature=0,
+    max_tokens=None,
+    timeout=None,
+    max_retries=2,
+    # other params...
+)
+
+# from langchain_google_vertexai import GoogleVertexAIEmbeddings
+
+# embedding_model = GoogleVertexAIEmbeddings(
+#     model_name="textembedding-gecko@001"  # You can also use @latest
+# )
+
+from langchain_google_vertexai import VertexAIEmbeddings
+
+# Initialize the a specific Embeddings Model version
+# embeddings = VertexAIEmbeddings(model_name="text-embedding-001")
+
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
+
+model = "sentence-transformers/all-MiniLM-L6-v2"
+
+embeddings = HuggingFaceEndpointEmbeddings(
+    model=model,
+    task="feature-extraction",
+    huggingfacehub_api_token=HF_TOKEN,
+)
+
+# embeddings = HuggingFaceInferenceAPIEmbeddings(
+#     api_key="",
+#     model_name="BAAI/bge-base-en-v1.5"
+# )
 
 # embedding_model = HuggingFaceEmbeddings(model_name="BAAI/bge-large-en")
 
@@ -64,10 +106,6 @@ def get_safe_filename_from_url(url):
 
 @traceable
 def process_document_and_get_retriever(pdf_url: str):
-    """
-    Loads, splits a PDF, and creates a retriever.
-    Crucially, it caches the retriever based on the PDF URL.
-    """
     print(f"CACHE MISS: Processing new document from {pdf_url}.")
     
     # Download the PDF
@@ -77,29 +115,28 @@ def process_document_and_get_retriever(pdf_url: str):
     with open(temp_pdf_path, "wb") as f:
         f.write(response.content)
 
-    # 1. Load the document
+    # Load and split
     loader = PyPDFLoader(temp_pdf_path)
     docs = loader.load()
-
-    # 2. Split the document
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     all_splits = text_splitter.split_documents(docs)
 
-    # 3. Create and store embeddings (This is the slow part we want to cache)
-    vector_store = Chroma.from_documents(
+    # Replace Chroma with FAISS
+    # vector_store = FAISS.from_documents(
+    #     documents=all_splits,
+    #     embedding=MistralAIEmbeddings(
+    #         model="mistral-embed",
+    #         mistral_api_key=MISTRAL_API_KEY
+    #     )
+    # )
+    
+    vector_store = FAISS.from_documents(
         documents=all_splits,
-        embedding = MistralAIEmbeddings(
-    model="mistral-embed",  # This is the standard embedding model name
-    mistral_api_key=MISTRAL_API_KEY  # Optional if set in environment variable
-)
+        embedding=embeddings
     )
 
-    # 4. Create a retriever
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
-
-    # 5. Store the new retriever in the cache and clean up
     os.remove(temp_pdf_path)
-    
     return retriever
 
 # --- LLM Chain Definition ---
@@ -117,9 +154,10 @@ prompt = ChatPromptTemplate.from_template(structured_input_template)
 #     temperature=0.2
 # )
 model = ChatMistralAI(model="mistral-medium", mistral_api_key=MISTRAL_API_KEY)
-chain = prompt | model
+chain = prompt | llm
 
 # --- OPTIMIZATION 2: Asynchronous Answering ---
+@traceable
 async def answer_question(query: str, retriever, chain: Runnable):
     """Answers a single question asynchronously."""
     # The retriever's 'invoke' might be blocking, run it in a thread pool
@@ -136,6 +174,7 @@ async def answer_question(query: str, retriever, chain: Runnable):
     summary="Process a policy document and answer questions",
     dependencies=[Depends(verify_api_key)]
 )
+@traceable
 async def hackrx_run(request: APIRequest):
     """
     This endpoint receives a URL to a PDF document and a list of questions.
